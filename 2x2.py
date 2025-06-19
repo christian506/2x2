@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Smoking Dashboard", layout="wide")
 
 # ── Load data ─────────────────────────────────────────────────────────────────
@@ -11,53 +10,49 @@ def load_data():
     return pd.read_csv("smoking.csv")
 
 df = load_data()
-years = sorted(df["Year"].astype(int).unique())
-countries = sorted(df["Country"].unique())
-metrics = [
-    "Data.Percentage.Total",
-    "Data.Percentage.Male",
-    "Data.Percentage.Female",
-]
+col = "Data.Percentage.Total"
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
-st.sidebar.header("Settings")
-yr_min, yr_max = st.sidebar.slider("Period", min_value=years[0], max_value=years[-1],
-                                   value=(years[0], years[-1]))
-sel_ctrs = st.sidebar.multiselect("Origins", countries, countries)
-item1 = st.sidebar.selectbox("Item 1", metrics, index=0)
-item2 = st.sidebar.selectbox("Item 2", metrics, index=1)
-
-# ── Filter ────────────────────────────────────────────────────────────────────
-df_f = df[
-    (df["Year"] >= yr_min) & (df["Year"] <= yr_max) &
-    df["Country"].isin(sel_ctrs)
-]
-
-# ── Row 1 ─────────────────────────────────────────────────────────────────────
+# ── First row: Map & Gender box ───────────────────────────────────────────────
 r1c1, r1c2 = st.columns(2)
 
 with r1c1:
-    cnt = df_f.groupby("Country").size().reset_index(name="count")
-    fig1 = px.bar(cnt, x="Country", y="count")
-    fig1.update_layout(height=300, margin=dict(t=20,b=20,l=20,r=20))
-    st.plotly_chart(fig1, use_container_width=True)
+    # choropleth map
+    mdf = df.groupby("Country")[col].mean().reset_index()
+    fig_map = px.choropleth(
+        mdf,
+        locations="Country",
+        locationmode="country names",
+        color=col,
+    )
+    fig_map.update_layout(height=300, margin=dict(t=10, b=10, l=10, r=10))
+    st.plotly_chart(fig_map, use_container_width=True)
 
 with r1c2:
-    fig2 = px.scatter(df_f, x=item1, y=item2, color="Country")
-    fig2.update_layout(height=300, margin=dict(t=20,b=20,l=20,r=20))
-    st.plotly_chart(fig2, use_container_width=True)
+    # gender box plot
+    if "Data.Percentage.Male" in df and "Data.Percentage.Female" in df:
+        gdf = df.melt(
+            id_vars=["Country","Year"],
+            value_vars=["Data.Percentage.Male","Data.Percentage.Female"],
+            var_name="Gender", value_name="Rate"
+        )
+        gdf["Gender"] = gdf["Gender"].str.replace("Data.Percentage.","")
+        fig_box = px.box(gdf, x="Gender", y="Rate", points="all")
+        fig_box.update_layout(height=300, margin=dict(t=10, b=10, l=10, r=10))
+        st.plotly_chart(fig_box, use_container_width=True)
 
-# ── Row 2 ─────────────────────────────────────────────────────────────────────
+# ── Second row: Trend line & Top-10 bar ────────────────────────────────────────
 r2c1, r2c2 = st.columns(2)
 
 with r2c1:
-    t1 = df_f.groupby("Year")[item1].mean().reset_index()
-    fig3 = px.line(t1, x="Year", y=item1, markers=True)
-    fig3.update_layout(height=300, margin=dict(t=20,b=20,l=20,r=20))
-    st.plotly_chart(fig3, use_container_width=True)
+    # trend over time
+    tdf = df.groupby("Year")[col].mean().reset_index()
+    fig_line = px.line(tdf, x="Year", y=col, markers=True)
+    fig_line.update_layout(height=300, margin=dict(t=10, b=10, l=10, r=10))
+    st.plotly_chart(fig_line, use_container_width=True)
 
 with r2c2:
-    t2 = df_f.groupby("Year")[item2].mean().reset_index()
-    fig4 = px.line(t2, x="Year", y=item2, markers=True)
-    fig4.update_layout(height=300, margin=dict(t=20,b=20,l=20,r=20))
-    st.plotly_chart(fig4, use_container_width=True)
+    # top-10 countries
+    t10 = df.groupby("Country")[col].mean().nlargest(10).reset_index()
+    fig_bar = px.bar(t10, x="Country", y=col)
+    fig_bar.update_layout(height=300, margin=dict(t=10, b=10, l=10, r=10))
+    st.plotly_chart(fig_bar, use_container_width=True)
